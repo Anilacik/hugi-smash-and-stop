@@ -1290,7 +1290,7 @@ SFX.vase = () => RX.miss();
 // ======================= ANA SAYFA + HARİTA =======================
 let SCENE = 'home', UI = [], TEST = false, logoTaps = 0;
 try { TEST = localStorage.getItem('yu_test') === '1'; } catch (e) {}
-const isOpen = i => true || TEST || i === 0 || !!LEVELS[i].final || !!DONE[LEVELS[i - 1].no] || !!DONE[LEVELS[i].no];
+const isOpen = i => TEST || i === 0 || !!LEVELS[i].final || !!DONE[LEVELS[i - 1].no] || !!DONE[LEVELS[i].no];
 function curLevel() { for (let i = 0; i < LEVELS.length; i++) if (!DONE[LEVELS[i].no]) return isOpen(i) ? i : Math.max(0, i - 1); return LEVELS.length - 1; }
 function ovHide() { document.getElementById('ov').classList.remove('show'); }
 function toMap() { ovHide(); if (S) { S.hold = false; S.auto = 0; humStop(); } SCENE = 'map'; mapFocus(curLevel()); }
@@ -1378,7 +1378,7 @@ function drawHome() {
   roundBtn(CX - 110, ry, 28, ['#ffe066', '#e0a000'], '🛒', 'Mağaza', shop);
   roundBtn(CX, ry, 28, ['#7af8ff', '#2a6cff'], '🗺️', 'Harita', () => { SCENE = 'map'; mapFocus(ci); });
   roundBtn(W - 44, H * .62, 26, ['#ff3fa4', '#2a0050'], '🔥', 'FİNAL', () => play(LEVELS.length - 1));
-  roundBtn(44, H * .62, 26, ['#ffe066', '#e0a000'], '🏆', 'Rekorlar', showBoard);
+  roundBtn(44, H * .62, 26, ['#ffe066', '#e0a000'], '🏆', 'Sıralama', showBoard);
   roundBtn(CX + 110, ry, 28, ['#ff9ad5', '#a020c8'], MUS.on ? '🎵' : '🔇', 'Ses', () => { MUS.on = !MUS.on; try { localStorage.setItem('yu_mus', MUS.on ? '1' : '0'); } catch (e) {} });
 }
 // ---------- harita ----------
@@ -1530,39 +1530,44 @@ function endlessOver() {
   }, 900);
 }
 // ---- sıralama (ortak tablo varsa onu, yoksa telefondaki kayıtlar) ----
-let LBdb = null, LBid = null, LBok = null, TOP3 = [];
-function refreshTop() { lbList().then(r => { TOP3 = r.rows; }).catch(() => {}); }
-async function lbInit() { LBok = false; return;
-  try { if (!window.claude || !window.claude.use) { LBok = false; return; }
-    const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-    if (!db || !user) { LBok = false; return; }
-    LBdb = db; LBid = await user.id(); const w = await user.can('data.write');
-    LBok = !!LBid && w !== false;
-  } catch (e) { LBok = false; }
+// ---- ortak sıralama (Supabase) ----
+const SB_URL = 'https://gycapulstblwpeueskrg.supabase.co', SB_KEY = 'sb_publishable_5TjeOKRrfdpFvQbNKmyemw_eFcqs_rp';
+let LBok = null, TOP3 = [];
+async function sb(path, opt = {}) {
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null; const tm = ctl ? setTimeout(() => ctl.abort(), 6000) : 0;
+  try { const r = await fetch(SB_URL + '/rest/v1/' + path, Object.assign({}, opt, { signal: ctl && ctl.signal, headers: Object.assign({ apikey: SB_KEY, 'Content-Type': 'application/json' }, opt.headers || {}) }));
+    if (!r.ok) throw new Error('sb ' + r.status); const t = await r.text(); return t ? JSON.parse(t) : null; } finally { if (tm) clearTimeout(tm); }
 }
+let SBBEST = 0; try { SBBEST = +localStorage.getItem('yu_sbbest') || 0; } catch (e) {}
+function refreshTop() { lbList().then(r => { TOP3 = r.rows; }).catch(() => {}); }
+async function lbInit() { try { await sb('scores?select=score&limit=1'); LBok = true; } catch (e) { LBok = false; } if (LBok && EBEST > SBBEST) lbSubmit(EBEST); }
 async function lbSubmit(sc) {
-  if (!LBok) return;
-  try { const ref = LBdb.collection('scores').doc(LBid); const cur = await ref.get(); const prev = cur.exists ? (cur.data().best || 0) : 0;
-    if (sc > prev || !cur.exists || (cur.data().name !== PNAME)) await ref.set({ name: (PNAME || 'Oyuncu').slice(0, 16), best: Math.max(sc, prev), t: Date.now() });
-  } catch (e) { LBok = false; }
+  sc = Math.min(5000000, Math.max(0, Math.round(sc))); if (sc <= 0 || sc <= SBBEST) return;
+  try { await sb('scores', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: (PNAME || 'Oyuncu').slice(0, 16), score: sc }) });
+    SBBEST = sc; try { localStorage.setItem('yu_sbbest', sc); } catch (e) {} LBok = true; } catch (e) {}
 }
 async function lbList() {
-  if (LBok) { try { const q = await LBdb.collection('scores').orderBy('best', 'desc').limit(10).get(); return { shared: true, rows: q.docs.map(d => ({ n: String(d.data().name || 'Oyuncu'), s: +d.data().best || 0, me: d.id === LBid })) }; } catch (e) {} }
-  return { shared: false, rows: ELOCAL.map(r => ({ n: r.n, s: r.s, me: false })) };
+  try { const q = await sb('scores?select=name,score&order=score.desc&limit=500'); const seen = {}, rows = [];
+    for (const r of q || []) { const k = String(r.name).toLowerCase(); if (seen[k]) continue; seen[k] = 1; rows.push({ n: String(r.name), s: +r.score || 0, me: !!PNAME && k === PNAME.toLowerCase() }); }
+    LBok = true; return { shared: true, rows };
+  } catch (e) { LBok = false; return { shared: false, rows: ELOCAL.map(r => ({ n: r.n, s: r.s, me: true })) }; }
 }
+function lbRow(box, r, i) { const e = document.createElement('div'); e.className = 'lbr' + (r.me ? ' me' : ''); const a = document.createElement('span'); a.textContent = `${['🥇', '🥈', '🥉'][i] || (i + 1) + '.'} ${r.n}`; const v = document.createElement('b'); v.textContent = r.s.toLocaleString('tr-TR'); e.appendChild(a); e.appendChild(v); box.appendChild(e); }
 async function lbRender(box) {
-  box.innerHTML = '';
-  const h = document.createElement('div'); h.className = 'lbt'; h.textContent = '🏆 Rekorların'; box.appendChild(h);
-  if (!ELOCAL.length) { const e = document.createElement('div'); e.className = 'lbr'; e.textContent = 'Henüz skorun yok — ilk rekorunu kır!'; box.appendChild(e); }
-  ELOCAL.slice(0, 5).forEach((r, i) => { const e = document.createElement('div'); e.className = 'lbr' + (i === 0 ? ' me' : ''); const a = document.createElement('span'); const dt = r.t ? new Date(r.t) : null; a.textContent = `${['🥇', '🥈', '🥉'][i] || (i + 1) + '.'} ${dt ? dt.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : ''}`; const v = document.createElement('b'); v.textContent = r.s.toLocaleString('tr-TR'); e.appendChild(a); e.appendChild(v); box.appendChild(e); });
+  const { shared, rows } = await lbList(); box.innerHTML = '';
+  const h = document.createElement('div'); h.className = 'lbt'; h.textContent = shared ? '🏆 Sıralama · herkes' : '🏆 Rekorların (internet yok)'; box.appendChild(h);
+  if (!rows.length) { const e = document.createElement('div'); e.className = 'lbr'; e.textContent = 'Henüz kimse yok — ilk sen ol!'; box.appendChild(e); return; }
+  rows.slice(0, 10).forEach((r, i) => lbRow(box, r, i));
+  if (shared) { const mi = rows.findIndex(r => r.me); if (mi >= 10) { const d = document.createElement('div'); d.className = 'lbt'; d.style.marginTop = '6px'; d.textContent = '…'; box.appendChild(d); lbRow(box, rows[mi], mi); }
+    else if (mi < 0 && EBEST > 0) { const d = document.createElement('div'); d.className = 'lbt'; d.style.marginTop = '6px'; d.textContent = `Senin rekorun: ${EBEST.toLocaleString('tr-TR')}`; box.appendChild(d); } }
 }
 function showBoard() {
-  showOv('', '🏆', 'Rekorların', 'Kendi rekorunu geçebilecek misin?', [['Kapat', ovHide, 'alt'], ['Sonsuz ▶', startEndless]]);
+  showOv('', '🏆', 'Sıralama', 'Sonsuz modda en yüksek skorlar', [['Kapat', ovHide, 'alt'], ['Sonsuz ▶', startEndless]]);
   const b = document.getElementById('obtns'); const box = document.createElement('div'); box.className = 'lbbox'; box.innerHTML = '<div class="lbt">Yükleniyor…</div>'; b.parentNode.insertBefore(box, b); lbRender(box);
 }
 // ---- isim ve mod seçimi ----
 function askName(after) {
-  showOv('', '👋', 'Selam! Ben Hugi.', 'Adın ne? Seni böyle çağıracağım.', []);
+  showOv('', '👋', 'Selam! Ben Hugi.', 'Adın ne? Sıralamada bu isimle görüneceksin.', []);
   const b = document.getElementById('obtns'); b.innerHTML = ''; b.style.flexDirection = 'column';
   const inp = document.createElement('input'); inp.className = 'nameinp'; inp.maxLength = 16; inp.placeholder = 'Adın'; inp.value = PNAME; b.appendChild(inp);
   const ok = document.createElement('button'); ok.textContent = 'Devam ▶'; ok.style.cssText = 'margin-top:10px;width:100%';
