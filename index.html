@@ -592,14 +592,16 @@ function down(e) {
   if (!S.hold && p.y >= 64 && p.y < 92 && p.x < 120) { shop(); return; }
   if (!S.hold && p.y > 676 + OFFY && p.x < 54) { MUS.on = !MUS.on; try { localStorage.setItem('yu_mus', MUS.on ? '1' : '0'); } catch (e) {} toast(MUS.on ? 'Müzik açık' : 'Müzik kapalı'); return; }
   if (S.phase !== 'play' || S.hold || S.grab || S.freeze || S.presses <= 0) return;
-  if (!L.endless) S.presses--; S.hold = true; S.v = BV0; S.tier = 0; S.intro = Math.min(S.intro, 20); SFX.go(); humStart(); buzz(8);
+  if (!L.endless) S.presses--; S.lastMul = 1; S.hold = true; S.v = BV0; S.tier = 0; S.intro = Math.min(S.intro, 20); SFX.go(); humStart(); buzz(8);
 }
 function up(e) {
   if (SCENE !== 'game') { uiUp(e); return; }
   if (S.auto || !S.hold) return;
   if (S.air) { S.hold = false; humStop(); return; }
+  const relK = S.v / BVMAX, keep = S.streak;
   S.hold = false; S.v = 0; S.streak = 0; S.slow = S.boost = 0; humStop(); SFX.stop();
   const f = frontSolid();
+  if (L.endless && f && f.type === 'vase') { const gp = dOf(f) - PZ; S.lastMul = relK >= .6 && gp <= 2.5 * BGAP ? 3 : relK >= .45 && gp <= 4 * BGAP ? 2 : 1; S.lastMulShown = false; S.streak = S.lastMul === 3 ? keep : S.lastMul === 2 ? Math.floor(keep / 2) : 0; }
   if (f && (f.type === 'vase' || f.type === 'mine')) {
     S.grab = 1; return;   // önde vazo varsa nerede olursa olsun kendine çeker
   }
@@ -669,7 +671,7 @@ function smash(o) {
     later(checkEnd, 500); return;
   }
   o.broken = true; burst(o, o.type); S.streak++; S.best = Math.max(S.best, S.streak); S.comboPop = 1;
-  addScore({ plate: 10, stack: 50, tower: 60, giant: 100 }[o.type] || 0);
+  addScore(Math.round(({ plate: 10, stack: 50, tower: 60, giant: 100 }[o.type] || 0) * (1 + 2 * Math.min(1, S.v / BVMAX))));
   if (L.endless && o.type === 'giant' && S.lost > 0) { S.lost--; S.pops.push({ text: '+1 CAN!', x: CX, y: 200, life: 60, col: '#7dffb0', big: 1 }); }
   S.rec = 1; S.recSide *= -1;
   if (o.type === 'plate') { SFX.plate(S.streak); S.shake = Math.max(S.shake, 3 + S.v / BVMAX * 3); buzz(6); }
@@ -683,7 +685,7 @@ function smash(o) {
   if (S.streak % 15 === 0) S.pops.push({ text: ['SÜPER!', 'MUHTEŞEM!', 'DURDURULAMAZ!'][Math.min(2, S.streak / 15 - 1 | 0)], x: CX, y: 250, life: 55, col: '#ffd23a', big: 1 });
 }
 function collect(o) {
-  o.broken = true; S.got++; S.hug = 1; addScore(250);
+  o.broken = true; S.got++; S.hug = 1; { const m = L.endless ? (S.lastMul || 1) : 1; addScore(250 * m); if (m > 1 && !S.lastMulShown) { S.lastMulShown = true; S.pops.push({ text: m === 3 ? 'SON AN! x3' : 'CESUR! x2', x: CX, y: 150, life: 45, col: m === 3 ? '#7dffb0' : '#ffd23a' }); } }
   const sc = screenOf(dOf(o), 0, VH / 2);
   S.flyers.push({ sx: sc.x, sy: sc.y, s0: sc.s * VH / 256, t: 0 });
   for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 7; S.fx.push({ kind: i % 3 ? 'conf' : 'star', x: sc.x, y: sc.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4, r: 5 + Math.random() * 5, col: ['#ffd23a', '#ff4f81', '#18c3b0', '#5b7cff', '#a855f7'][i % 5], life: 40 + Math.random() * 20, rot: Math.random() * 6 }); }
@@ -1471,8 +1473,8 @@ cv.addEventListener('pointermove', uiMove);
 const WORLDS_E = ['candy', 'neon', 'tropic', 'lava', 'space'], WNAMES = ['Şeker Diyarı', 'Neon Şehir', 'Tropik Ada', 'Lav Dağı', 'Galaksi'];
 const ENDLESS = { no: '∞', endless: 1, name: 'Sonsuz', theme: 'candy', world: 0, extra: 0, slack: 0, vmax: 14, c: [360, 760, 140, 330], row: '', tip: '' };
 let PNAME = ''; try { PNAME = localStorage.getItem('yu_name') || ''; } catch (e) {}
-let EBEST = 0; try { EBEST = +localStorage.getItem('yu_ebest') || 0; } catch (e) {}
-let ELOCAL = []; try { ELOCAL = JSON.parse(localStorage.getItem('yu_elocal') || '[]'); } catch (e) {}
+let EBEST = 0; try { EBEST = +localStorage.getItem('yu_ebest2') || 0; } catch (e) {}
+let ELOCAL = []; try { ELOCAL = JSON.parse(localStorage.getItem('yu_elocal2') || '[]'); } catch (e) {}
 const ER = (() => { let x = Date.now() % 2147483647 || 7; return () => (x = x * 48271 % 2147483647) / 2147483647; })();
 function setWorld(w) {
   const th = WORLDS_E[w % 5]; L.theme = th; L.world = w % 5; L.name = WNAMES[w % 5]; T = THEMES[th];
@@ -1526,7 +1528,7 @@ function endlessTick() {
   if (S.items.length > 260) S.items = S.items.filter(o => !o.broken || o.z0 > S.belt - 300);
   S.rushK = Math.max(0, Math.min(1, (S.rushK || 0) + (S.rush ? .0025 : -.02)));   // uzun koşuda tavan yavaş yavaş yükselir
   BVMAX = Math.min(34, 14 + Math.min(1, S.seg / 40) * 20) + 8 * S.rushK;
-  S.mult = 1 + Math.min(4, Math.floor(S.streak / 15));
+  S.mult = 1 + Math.min(4, Math.floor(S.streak / 8));
   S.scorePop *= .85;
 }
 function addScore(p) { if (!L.endless || !p) return; S.score += p * S.mult; S.scorePop = 1; }
@@ -1535,7 +1537,7 @@ function endlessOver() {
   const sc = S.score, rec = sc > EBEST; if (rec) EBEST = sc;
   const coins = Math.floor(sc / 150); WALLET += coins;
   ELOCAL.push({ n: PNAME || 'Ben', s: sc, t: Date.now() }); ELOCAL.sort((a, b) => b.s - a.s); ELOCAL = ELOCAL.slice(0, 10);
-  try { localStorage.setItem('yu_ebest', EBEST); localStorage.setItem('yu_elocal', JSON.stringify(ELOCAL)); } catch (e) {} saveW();
+  try { localStorage.setItem('yu_ebest2', EBEST); localStorage.setItem('yu_elocal2', JSON.stringify(ELOCAL)); } catch (e) {} saveW();
   later(() => {
     showOv('', rec ? '🏆' : '💥', rec ? 'YENİ REKOR!' : 'Oyun bitti', rec ? `Skor: ${sc.toLocaleString('tr-TR')} · eski rekorunu geçtin! · +${coins} 🪙` : `Skor: ${sc.toLocaleString('tr-TR')} · rekoruna ${(EBEST - sc).toLocaleString('tr-TR')} puan kaldı · +${coins} 🪙`, [['Ana sayfa', toHome, 'alt'], ['Tekrar ▶', startEndless]]);
     const b = document.getElementById('obtns'); b.style.flexWrap = 'wrap';
@@ -1552,13 +1554,13 @@ async function sb(path, opt = {}) {
   try { const r = await fetch(SB_URL + '/rest/v1/' + path, Object.assign({}, opt, { signal: ctl && ctl.signal, headers: Object.assign({ apikey: SB_KEY, 'Content-Type': 'application/json' }, opt.headers || {}) }));
     if (!r.ok) throw new Error('sb ' + r.status); const t = await r.text(); return t ? JSON.parse(t) : null; } finally { if (tm) clearTimeout(tm); }
 }
-let SBBEST = 0; try { SBBEST = +localStorage.getItem('yu_sbbest') || 0; } catch (e) {}
+let SBBEST = 0; try { SBBEST = +localStorage.getItem('yu_sbbest2') || 0; } catch (e) {}
 function refreshTop() { lbList().then(r => { TOP3 = r.rows; }).catch(() => {}); }
 async function lbInit() { try { await sb('scores?select=score&limit=1'); LBok = true; } catch (e) { LBok = false; } if (LBok && EBEST > SBBEST) lbSubmit(EBEST); }
 async function lbSubmit(sc) {
   sc = Math.min(5000000, Math.max(0, Math.round(sc))); if (sc <= 0 || sc <= SBBEST) return;
   try { await sb('scores', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: (PNAME || 'Oyuncu').slice(0, 16), score: sc }) });
-    SBBEST = sc; try { localStorage.setItem('yu_sbbest', sc); } catch (e) {} LBok = true; } catch (e) {}
+    SBBEST = sc; try { localStorage.setItem('yu_sbbest2', sc); } catch (e) {} LBok = true; } catch (e) {}
 }
 async function lbList() {
   try { const q = await sb('scores?select=name,score&order=score.desc&limit=500'); const seen = {}, rows = [];
