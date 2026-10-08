@@ -1352,6 +1352,21 @@ function logo(y, size) {
   ctx.save(); ctx.translate(CX, y + size * .72); ctx.rotate(-.05); txt('SMASH & STOP', 0, 0, size * .33, '#ffffff', '#2a0a00', size * .12); ctx.restore();
 }
 const HOMEP = Array.from({ length: 9 }, (_, i) => ({ x: (i * 97) % 400, y: (i * 173) % 900, v: .4 + (i % 4) * .2, r: (i * 1.7) % 6, k: i % 6, s: .18 + (i % 3) * .07 }));
+function drawTop3() {
+  const y0 = 60, w = W - 32, rows = TOP3 || [];
+  ctx.fillStyle = 'rgba(30,14,60,.55)'; rr(16, y0, w, 64, 16); ctx.fill();
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.font = '900 10px -apple-system, Arial'; ctx.fillStyle = '#ffe9b0';
+  const mi = rows.findIndex(r => r.me);
+  ctx.fillText(`🏆 SONSUZ MOD · İLK 3${mi >= 0 ? `   ·   SEN: ${mi + 1}.` : EBEST > 0 ? `   ·   REKORUN: ${EBEST.toLocaleString('tr-TR')}` : ''}`, CX, y0 + 12);
+  if (!rows.length) { ctx.font = '800 12px -apple-system, Arial'; ctx.fillStyle = '#fff'; ctx.fillText('Henüz kimse yok — ilk sen ol!', CX, y0 + 40); }
+  const cw = w / 3, med = ['#ffd23a', '#d9e2f0', '#ff9f5a'];
+  rows.slice(0, 3).forEach((r, i) => { const cx = 16 + cw * i + cw / 2;
+    ctx.fillStyle = med[i]; ctx.beginPath(); ctx.arc(cx - cw / 2 + 16, y0 + 40, 9, 0, 7); ctx.fill(); ctx.fillStyle = '#3a2000'; ctx.font = '900 11px -apple-system, Arial'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), cx - cw / 2 + 16, y0 + 40.5);
+    ctx.textAlign = 'left'; ctx.font = '800 12px -apple-system, Arial'; ctx.fillStyle = r.me ? '#7dffb0' : '#fff'; let nm = r.n; while (nm.length > 2 && ctx.measureText(nm).width > cw - 34) nm = nm.slice(0, -1); if (nm !== r.n) nm += '…';
+    ctx.fillText(nm, cx - cw / 2 + 30, y0 + 33); ctx.font = '900 11px -apple-system, Arial'; ctx.fillStyle = '#ffd23a'; ctx.fillText(r.s.toLocaleString('tr-TR'), cx - cw / 2 + 30, y0 + 49); });
+  ctx.textAlign = 'center';
+  btn(16, y0, w, 64, showBoard);
+}
 function drawHome() {
   UI = []; const t = S.t;
   const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3b1d9e'); g.addColorStop(.55, '#b03cc8'); g.addColorStop(1, '#ff7aa8'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -1361,8 +1376,8 @@ function drawHome() {
   for (const p of HOMEP) { p.y -= p.v; p.r += .01; if (p.y < -80) { p.y = H + 80; } ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.globalAlpha = .55; ctx.drawImage(PLATES[p.k], -128 * p.s, -128 * p.s, 256 * p.s, 256 * p.s); ctx.restore(); }
   ctx.globalAlpha = 1;
   coinPill(W - 128, 18); btn(W - 128, 18, 112, 34, shop);
-  if (EBEST > 0) { ctx.fillStyle = 'rgba(30,14,60,.55)'; rr(CX - 110, 58, 220, 22, 11); ctx.fill(); ctx.font = '800 11px -apple-system, Arial'; ctx.fillStyle = '#ffe9b0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`🏆 Sonsuz rekorun: ${EBEST.toLocaleString('tr-TR')} — geçebilir misin?`, CX, 69.5); btn(CX - 110, 58, 220, 22, showBoard); }
-  logo(H * .17, 78); btn(CX - 120, H * .1, 240, 120, () => { if (++logoTaps >= 5) { TEST = !TEST; try { localStorage.setItem('yu_test', TEST ? '1' : '0'); } catch (e) {} toast(TEST ? 'Test modu: tüm bölümler açık' : 'Test modu kapalı'); logoTaps = 0; } });
+  drawTop3();
+  logo(H * .17 + 34, 74); btn(CX - 120, H * .1 + 34, 240, 120, () => { if (++logoTaps >= 5) { TEST = !TEST; try { localStorage.setItem('yu_test', TEST ? '1' : '0'); } catch (e) {} toast(TEST ? 'Test modu: tüm bölümler açık' : 'Test modu kapalı'); logoTaps = 0; } });
   ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(CX, hy + 205, 100, 16, 0, 0, 7); ctx.fill();
   hugiFront(CX, hy + Math.sin(t * .06) * 6, .44, t);
   // OYNA
@@ -1378,7 +1393,6 @@ function drawHome() {
   roundBtn(CX - 110, ry, 28, ['#ffe066', '#e0a000'], '🛒', 'Mağaza', shop);
   roundBtn(CX, ry, 28, ['#7af8ff', '#2a6cff'], '🗺️', 'Harita', () => { SCENE = 'map'; mapFocus(ci); });
   roundBtn(W - 44, H * .62, 26, ['#ff3fa4', '#2a0050'], '🔥', 'FİNAL', () => play(LEVELS.length - 1));
-  roundBtn(44, H * .62, 26, ['#ffe066', '#e0a000'], '🏆', 'Sıralama', showBoard);
   roundBtn(CX + 110, ry, 28, ['#ff9ad5', '#a020c8'], MUS.on ? '🎵' : '🔇', 'Ses', () => { MUS.on = !MUS.on; try { localStorage.setItem('yu_mus', MUS.on ? '1' : '0'); } catch (e) {} });
 }
 // ---------- harita ----------
@@ -1592,7 +1606,7 @@ function firstRun() {
   if (!PNAME) askName(() => { try { localStorage.setItem('yu_moded', '1'); } catch (e) {} ovHide(); });
 }
 
-loadLevel(curLevel()); SCENE = 'home'; fit(); loop(); lbInit().then(refreshTop); refreshTop(); setTimeout(firstRun, 400);
+loadLevel(curLevel()); SCENE = 'home'; fit(); loop(); lbInit().then(refreshTop); refreshTop(); setInterval(() => { if (SCENE === 'home') refreshTop(); }, 45000); setTimeout(firstRun, 400);
 
 </script>
 </body>
