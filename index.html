@@ -672,7 +672,6 @@ function smash(o) {
   }
   o.broken = true; burst(o, o.type); S.streak++; S.best = Math.max(S.best, S.streak); S.comboPop = 1;
   addScore(Math.round(({ plate: 10, stack: 50, tower: 60, giant: 100 }[o.type] || 0) * (1 + 2 * Math.min(1, S.v / BVMAX))));
-  if (L.endless && o.type === 'giant' && S.lost > 0) { S.lost--; S.pops.push({ text: '+1 CAN!', x: CX, y: 200, life: 60, col: '#7dffb0', big: 1 }); }
   S.rec = 1; S.recSide *= -1;
   if (o.type === 'plate') { SFX.plate(S.streak); S.shake = Math.max(S.shake, 3 + S.v / BVMAX * 3); buzz(6); }
   if (o.type === 'stack') { S.streak += 4; SFX.stack(S.streak); burst(o, 'plate'); S.shake = Math.max(S.shake, 8); buzz([12, 20, 12]); S.pops.push({ text: 'YIĞIN! +5', x: CX, y: 330, life: 34, col: '#ff9f1c' }); }
